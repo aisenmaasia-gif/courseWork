@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
+using TestSimulator.Domain.Config;
 using TestSimulator.Domain.Models;
 
 namespace TestSimulator.UI;
@@ -12,132 +14,99 @@ class Program
         Console.OutputEncoding = Encoding.UTF8;
         Console.InputEncoding = Encoding.UTF8;
 
-        Console.WriteLine("=== ТРЕНАЖЕР ТЕСТІВ (Прототип V3 - Структурований) ===");
+        Console.WriteLine("=== ТРЕНАЖЕР ТЕСТІВ (Прототип V4 - Конфігурація та Результати) ===");
 
-        var topic = new Topic
+        var config = new AppConfig
         {
-            Name = "Програмування на платформі .NET",
-            Description = "Основи синтаксису мови C# та базові концепції CLR"
+            PassingScorePercentage = 70.0, 
+            SessionDurationMinutes = 15
         };
 
-        var test = new Test
-        {
-            Title = "Вступний тест з C#",
-            Description = "Перевірка базових знань синтаксису та ООП"
-        };
+        Console.ForegroundColor = ConsoleColor.DarkYellow;
+        Console.WriteLine($"[Налаштування]: Прохідний поріг: {config.PassingScorePercentage}% | Час ліміту: {config.SessionDurationMinutes} хв.");
+        Console.ResetColor();
 
+        var topic = new Topic { Name = "Базовий C#" };
+        var test = new Test { Title = "Експрес-контроль знань" };
+        
         var q1 = new SingleChoiceQuestion
         {
-            Text = "Який тип даних є посилальним (reference type) у C#?",
-            Points = 2.0,
-            Options = new List<string> { "int", "struct", "class", "double" },
-            CorrectOptionIndex = 2
+            Text = "Чи підтримує C# множинне наслідування класів?",
+            Points = 5.0,
+            Options = new List<string> { "Так", "Ні" },
+            CorrectOptionIndex = 1 // Ні
         };
 
-        var q2 = new MultipleChoiceQuestion
+        var q2 = new OpenAnswerQuestion
         {
-            Text = "Оберіть принципи ООП (виберіть кілька варіантів через кому):",
-            Points = 4.0,
-            Options = new List<string> { "Інкапсуляція", "Деструктуризація", "Поліморфізм", "Компіляція" },
-            CorrectOptionIndices = new List<int> { 0, 2 }
-        };
-
-        var q3 = new OpenAnswerQuestion
-        {
-            Text = "Яке ключове слово використовується для визначення константи в C#?",
-            Points = 3.0,
-            AcceptableAnswers = new List<string> { "const", "CONST" }
+            Text = "Введіть назву методу, який є точкою входу в консольну програму C#:",
+            Points = 5.0,
+            AcceptableAnswers = new List<string> { "Main", "main" }
         };
 
         test.Questions.Add(q1);
         test.Questions.Add(q2);
-        test.Questions.Add(q3);
         topic.Tests.Add(test);
 
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine($"\n[📚 Тема]: {topic.Name}");
-        Console.WriteLine($"   Опис: {topic.Description}");
-        Console.WriteLine($"   |-- [📜 Тест]: {test.Title}");
-        Console.WriteLine($"       Опис: {test.Description}");
-        Console.WriteLine($"       Загальна кількість питань: {test.Questions.Count}");
-        Console.WriteLine($"       Загальна сума балів за тест: {test.TotalPoints}");
-        Console.ResetColor();
-
-        Console.WriteLine("\nНатисніть Enter, щоб розпочати проходження цього тесту...");
-        Console.ReadLine();
-
+        Console.WriteLine($"\nТест: {test.Title} | Макс. балів: {test.TotalPoints}. Починаємо таймер...");
+        
+        var stopwatch = Stopwatch.StartNew();
+        
         double totalEarned = 0;
+        var incorrectIds = new List<Guid>();
 
         foreach (var question in test.Questions)
         {
-            Console.WriteLine($"\n------------------------------------------------");
-            Console.WriteLine($"Запитання: {question.Text} ({question.Points} б.)");
-            Console.WriteLine($"------------------------------------------------");
-
+            Console.WriteLine($"\nЗапитання: {question.Text}");
             object? userAnswer = null;
 
             if (question is SingleChoiceQuestion sc)
             {
                 for (int i = 0; i < sc.Options.Count; i++)
-                {
                     Console.WriteLine($"{i + 1}. {sc.Options[i]}");
-                }
-                Console.Write("Ваша відповідь: ");
+                
+                Console.Write("Відповідь: ");
                 if (int.TryParse(Console.ReadLine(), out int choice))
-                {
                     userAnswer = choice - 1;
-                }
-            }
-            else if (question is MultipleChoiceQuestion mc)
-            {
-                for (int i = 0; i < mc.Options.Count; i++)
-                {
-                    Console.WriteLine($"{i + 1}. {mc.Options[i]}");
-                }
-                Console.Write("Ваші відповіді (через кому): ");
-                string input = Console.ReadLine() ?? string.Empty;
-                var parts = input.Split(',');
-                var indices = new List<int>();
-                foreach (var part in parts)
-                {
-                    if (int.TryParse(part.Trim(), out int val))
-                    {
-                        indices.Add(val - 1);
-                    }
-                }
-                userAnswer = indices;
             }
             else if (question is OpenAnswerQuestion)
             {
-                Console.Write("Введіть відповідь: ");
+                Console.Write("Відповідь: ");
                 userAnswer = Console.ReadLine() ?? string.Empty;
             }
 
             var score = question.Evaluate(userAnswer);
             totalEarned += score.EarnedPoints;
 
-            if (score.IsFullyCorrect)
+            if (!score.IsFullyCorrect)
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"Правильно! (+{score.EarnedPoints} б.)");
+                incorrectIds.Add(question.Id);
             }
-            else if (score.EarnedPoints > 0)
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"Частково правильно. (+{score.EarnedPoints} б.)");
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"Неправильно. (0 б.)");
-            }
-            Console.ResetColor();
         }
 
+        stopwatch.Stop();
+
+        var result = new TestResult
+        {
+            SessionId = Guid.NewGuid(),
+            TestTitle = test.Title,
+            Score = Math.Round(totalEarned, 2),
+            MaxScore = test.TotalPoints,
+            CompletedAt = DateTime.Now,
+            Duration = stopwatch.Elapsed,
+            IncorrectQuestionIds = incorrectIds
+        };
+
+        result.IsPassed = result.PercentageScore >= config.PassingScorePercentage;
+
         Console.WriteLine("\n================================================");
-        Console.WriteLine($"ТЕСТ ЗАВЕРШЕНО!");
-        Console.WriteLine($"Ви набрали: {totalEarned} з {test.TotalPoints} балів.");
-        Console.WriteLine($"Відсоток успішності: {Math.Round((totalEarned / test.TotalPoints) * 100, 1)}%");
+        Console.ForegroundColor = result.IsPassed ? ConsoleColor.Green : ConsoleColor.Red;
+        Console.WriteLine($"РЕЗУЛЬТАТ: {(result.IsPassed ? "УСПІШНО СКЛАДЕНО" : "НЕ СКЛАДЕНО")}");
+        Console.ResetColor();
+        Console.WriteLine($"Оцінка: {result.GradeDescription} ({result.PercentageScore}%)");
+        Console.WriteLine($"Набрано балів: {result.Score} з {result.MaxScore}");
+        Console.WriteLine($"Час проходження: {result.Duration.Minutes} хв. {result.Duration.Seconds} сек.");
+        Console.WriteLine($"Кількість помилок: {result.IncorrectQuestionIds.Count}");
         Console.WriteLine("================================================");
 
         Console.WriteLine("\nНатисніть будь-яку клавішу для виходу...");
